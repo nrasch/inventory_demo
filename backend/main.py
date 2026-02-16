@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date, datetime
 import sqlite3
+import os
 from contextlib import contextmanager
 
 app = FastAPI(title="Metal Fabrication Inventory API")
@@ -11,14 +12,14 @@ app = FastAPI(title="Metal Fabrication Inventory API")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://dapper-kitsune-d5bc74.netlify.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Database setup
-DB_NAME = "inventory.db"
+# Database setup - use absolute path
+DB_NAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inventory.db")
 
 @contextmanager
 def get_db():
