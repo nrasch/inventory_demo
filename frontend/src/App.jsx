@@ -713,20 +713,49 @@ function Reports({ onError }) {
           summary: `Found ${lowMaterials.length} material(s) at or below reorder threshold`
         })
       } else if (selectedReport === 'inventory_value') {
-        const [inventoryRes, itemsRes] = await Promise.all([
+        const [inventoryRes, materialsRes, typesRes] = await Promise.all([
           axios.get(`${API_URL}/inventory`),
-          axios.get(`${API_URL}/materials`)
+          axios.get(`${API_URL}/materials`),
+          axios.get(`${API_URL}/material-types`)
         ])
         
-        const inventoryTotal = inventoryRes.data.reduce((sum, i) => sum + (i.cost * i.quantity), 0)
-        const materialsTotal = itemsRes.data.reduce((sum, m) => sum + (m.price_paid_per_unit * m.units_held), 0)
+        const typesMap = {}
+        typesRes.data.forEach(t => { typesMap[t.type_id] = t.name })
+        
+        // Job Inventory by type
+        const inventoryByType = {}
+        inventoryRes.data.forEach(i => {
+          const typeName = typesMap[i.type_id] || i.type || 'Unknown'
+          const value = i.cost * i.quantity
+          inventoryByType[typeName] = (inventoryByType[typeName] || 0) + value
+        })
+        
+        // Materials Stock by type
+        const materialsByType = {}
+        materialsRes.data.forEach(m => {
+          const typeName = typesMap[m.type_id] || 'Unknown'
+          const value = m.price_paid_per_unit * m.units_held
+          materialsByType[typeName] = (materialsByType[typeName] || 0) + value
+        })
+        
+        const inventoryTotal = Object.values(inventoryByType).reduce((a, b) => a + b, 0)
+        const materialsTotal = Object.values(materialsByType).reduce((a, b) => a + b, 0)
+        
+        const invRows = Object.entries(inventoryByType).map(([type, value]) => ({
+          Category: `Job Inv: ${type}`, 'Total Value': `$${value.toFixed(2)}`
+        }))
+        const matRows = Object.entries(materialsByType).map(([type, value]) => ({
+          Category: `Stock: ${type}`, 'Total Value': `$${value.toFixed(2)}`
+        }))
         
         setReportData({
           title: 'Inventory Value Report',
           columns: ['Category', 'Total Value'],
           rows: [
-            { Category: 'Job Inventory', 'Total Value': `$${inventoryTotal.toFixed(2)}` },
-            { Category: 'Materials Stock', 'Total Value': `$${materialsTotal.toFixed(2)}` },
+            ...invRows,
+            { Category: '--- Job Inventory Subtotal ---', 'Total Value': `$${inventoryTotal.toFixed(2)}` },
+            ...matRows,
+            { Category: '--- Materials Stock Subtotal ---', 'Total Value': `$${materialsTotal.toFixed(2)}` },
             { Category: 'Combined Total', 'Total Value': `$${(inventoryTotal + materialsTotal).toFixed(2)}` }
           ],
           summary: ''
@@ -1242,7 +1271,7 @@ function Dashboard({ onError }) {
           ) : (
             <ul className="job-list">
               {stats.lowStockItems.map(m => (
-                <li key={m.material_id}>ID #{m.material_id}: {m.units_held} / {m.reorder_threshold} threshold</li>
+                <li key={m.material_id}>{m.description}: {m.units_held} / {m.reorder_threshold} threshold</li>
               ))}
             </ul>
           )}
